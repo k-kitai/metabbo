@@ -38,6 +38,14 @@ class MetadataType(ABC):
         '''
         pass
 
+class NullMetadataType(MetadataType):
+    @classmethod
+    def sql_formats(cls):
+        return []
+
+    def to_strs():
+        return []
+
 class Logger:
     def __init__(self, x_types, metadata_type):
         assert issubclass(metadata_type, MetadataType)

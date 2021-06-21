@@ -19,9 +19,11 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #===============================================================================
-from   metabbo.helper.logger import Logger, MetadataType
+from   metabbo.helper.logger import Logger, MetadataType, NullMetadataType
+from   metabbo import FiniteSampling
 
 import logging
+import numpy as np
 import os
 from   unittest import TestCase
 
@@ -87,4 +89,20 @@ class TestLogger(TestCase):
         os.remove("test_load.db")
 
         return logger
+
+    def test_logger_compat(self):
+        logger = Logger([int, int, int, float, float, float], NullMetadataType)
+
+        try:
+            xs = np.random.randint(5, size=(10,6))
+            FiniteSampling(xs, lambda xs: np.sum(xs, axis=1), num_random_init=5, randseed=123, logger=logger)
+            self.fail()  # An exception should be thrown before this line
+        except AssertionError as ae:
+            if len(ae.args) > 0 and ae.args[0] == None:
+                raise ae
+            else:
+                pass
+
+        xs = [x.tolist() + y.tolist() for x,y in zip(np.random.randint(5, size=(10,3)), np.random.randn(10,3))]
+        FiniteSampling(xs, lambda xs: np.sum(xs, axis=1), num_random_init=5, randseed=123, logger=logger)
 

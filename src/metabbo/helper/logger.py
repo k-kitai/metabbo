@@ -25,7 +25,7 @@ import os
 import sqlite3
 
 class Logger:
-    def __init__(self, x_types, fname=":memory:"):
+    def __init__(self, x_types, fname=":memory:", commit_every=100):
         self.x_types = x_types
         self.x_types_format = ", ".join(map(lambda t: {int: "%d", float: "%e"}[t], x_types))
         self.x_colnames = ["x%d"%i for i in range(len(x_types))]
@@ -39,12 +39,18 @@ class Logger:
             + ", y float, info text);")
 
         self.db.commit()
+        self.commit_every = commit_every
+        self.num_cached = 0
 
     def _format_x(self, x):
         return [f(el) for (f, el) in zip(self.x_types, x)]
 
     def log1(self, x, y, info={}):
         self.db.execute("INSERT INTO Logs VALUES (" + self.x_types_format%tuple(x) + ", %e, '%s');"%(y, json.dumps(info)))
+        self.num_cached += 1
+        if self.commit_every <= self.num_cached:
+            self.db.commit()
+            self.num_cached = 0
 
     def log(self, xs, ys, infos=None):
         assert len(xs) == len(ys) and (infos == None or len(xs) == len(infos)), "xs and ys(, and infos) must have the same length."

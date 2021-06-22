@@ -28,6 +28,7 @@ class Logger:
     def __init__(self, x_types, fname=":memory:"):
         self.x_types = x_types
         self.x_types_format = ", ".join(map(lambda t: {int: "%d", float: "%e"}[t], x_types))
+        self.x_colnames = ["x%d"%i for i in range(len(x_types))]
 
         #if os.path.exists(fname):
         #    raise Exception("File {} already exists".format(fname))
@@ -49,6 +50,18 @@ class Logger:
         assert len(xs) == len(ys) and (infos == None or len(xs) == len(infos)), "xs and ys(, and infos) must have the same length."
         for x, y, info in zip(xs, ys, infos or [{} for _ in range(len(xs))]):
             self.log1(x, y, info)
+
+    @property
+    def xs(self):
+        return list(map(list, self.db.execute("SELECT " + ", ".join(self.x_colnames) + " FROM Logs").fetchall()))
+
+    @property
+    def ys(self):
+        return list(map(lambda x: x[0], self.db.execute("SELECT y FROM Logs").fetchall()))
+
+    @property
+    def infos(self):
+        return list(map(lambda s: json.loads(s[0]), self.db.execute("SELECT info FROM Logs").fetchall()))
 
     def __del__(self):
         self.db.commit()

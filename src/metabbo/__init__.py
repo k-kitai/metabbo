@@ -21,5 +21,5 @@
 #===============================================================================
 
 from .model import MetaModel
-from .sampling import FiniteSampling
+from .sampling import FiniteSetSampling
 

@@ -24,7 +24,7 @@ import numpy as np
 
 from . import helper
 
-class FiniteSampling():
+class FiniteSetSampling():
     '''
     Managing a sampling process from a set of finite points to obtain the best
 
@@ -42,26 +42,20 @@ class FiniteSampling():
 
         randseed: int, default = 123
             The random seed for deciding the `num_random_init` data points.
+
+        logger: helper.Logger, default = None
+            If povided, load the sampling records from the logger and extend
+            them with new samples made in the `run` method.
     '''
-    def __init__(self, xs, evaluator, num_random_init=10, randseed=123, logger=None):
+    def __init__(self, xs, evaluator, logger=None):
         self.xs = np.array(xs, dtype=object)
         self.ys = np.repeat(-np.inf, len(xs))
         self.evaluator = evaluator
         self.observed = np.repeat(False, len(xs))
         self.arange = np.arange(len(xs))
-        self.observation_idx = []
-        self.observation_step = []
         self.current_step = 1
 
         self.x_types = list(map(type, self.xs[0]))
-
-        # Initialize training data with random
-        np.random.seed(randseed)
-        init_observe = np.random.permutation(self.arange)[:num_random_init]
-        self.observed[init_observe] = True
-        self.observation_idx.extend(init_observe)
-        self.observation_step.extend([0]*len(init_observe))
-        self.ys[self.observed] = self.evaluator(self.xs[self.observed])
 
         # Connect to logger if provided
         if logger == None:
@@ -69,15 +63,26 @@ class FiniteSampling():
         else:
             assert isinstance(logger, helper.logger.Logger) and logger.x_types == self.x_types
             self.logger = logger
+            raw_xs = xs.tolist()
+
+            if len(logger.xs) > 0:
+                self.current_step = max(map(lambda d: d['step'], logger.infos)) + 1
+            else:
+                self.current_step = 1
+
+            for x, y in zip(logger.xs, logger.ys):
+                try:
+                    n = raw_xs.index(x)
+                    self.ys[n] = y
+                    self.observed[n] = True
+                except:
+                    pass
+
 
     def run(self, metamodel_cls, num_probe=1, num_sampling=10, larger_is_better=True, train_args={}, predict_args={}):
         '''
         Sampling from remaining data points based on the prediction by the
         given model.
-
-        The field variable `observation_idx` logs all the indices of evaluated
-        points, and the structures and scores can be accessed through like
-        `xs[observation_idx]` and `ys[observation_idx]`.
 
         Args:
             metamodel_cls: ClassName of an implementation of MetaClass
@@ -114,10 +119,11 @@ class FiniteSampling():
                 )[:num_probe]
             ]
             self.observed[nexts] = True
-            self.observation_idx.extend(nexts.tolist())
-            self.observation_step.extend([self.current_step] * len(nexts))
-            self.current_step += 1
 
             self.ys[nexts] = self.evaluator(self.xs[nexts])
+
+            if self.logger:
+                self.logger.log(self.xs[nexts], self.ys[nexts], [{"step": self.current_step, "model": metamodel_cls.__name__} for _ in range(len(nexts))])
+            self.current_step += 1
         return
 

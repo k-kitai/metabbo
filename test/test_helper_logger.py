@@ -19,12 +19,11 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #===============================================================================
-from   metabbo.helper.logger import Logger
-from   metabbo import FiniteSampling
+from   metabbo.helper import Logger
+from   metabbo import FiniteSetSampling
 
 import logging
 import numpy as np
-import os
 from   unittest import TestCase
 
 class TestLogger(TestCase):
@@ -38,3 +37,22 @@ class TestLogger(TestCase):
         )
         del logger
 
+    def test_attribute(self):
+        logger = Logger([int, float])
+        logger.log([[1, 2.0], [2, 3.0]], [2.0, 6.0], [{"say": "Hello"}, {"objective": "World"}])
+        logger.log1([3, 4.0], 12.0, {"tension": "!"})
+        xs = logger.xs
+        self.assertEqual(3, len(xs))
+        self.assertEqual([1, 2.0], xs[0])
+        self.assertEqual([2, 3.0], xs[1])
+        self.assertEqual([3, 4.0], xs[2])
+        ys = logger.ys
+        self.assertEqual(3, len(ys))
+        self.assertEqual(2.0, ys[0])
+        self.assertEqual(6.0, ys[1])
+        self.assertEqual(12.0, ys[2])
+        infos = logger.infos
+        self.assertEqual(3, len(infos))
+        self.assertEqual("Hello", infos[0]["say"])
+        self.assertEqual("World", infos[1]["objective"])
+        self.assertEqual("!", infos[2]["tension"])

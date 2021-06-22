@@ -38,7 +38,7 @@ class MetaModel(ABC):
     def predict(self, xs):
         pass
 
-    def predict_argsort(self, xs, larger_is_better=True, *args, **kwargs):
+    def predict_argsort(self, xs, is_minimization=False, *args, **kwargs):
         scores = self.predict(xs, *args, **kwargs)
-        return np.argsort(scores * [1,-1][larger_is_better])
+        return np.argsort(scores * [-1,1][is_minimization])
 

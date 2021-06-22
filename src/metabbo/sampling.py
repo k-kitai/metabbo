@@ -36,24 +36,22 @@ class FiniteSetSampling():
             Given a list of a subset of `xs`, this should return their
             respective score.
 
-        num_random_init: int, default = 10
-            The number of data points to be evaluated at first for the training
-            of regression models.
-
-        randseed: int, default = 123
-            The random seed for deciding the `num_random_init` data points.
-
         logger: helper.Logger, default = None
             If povided, load the sampling records from the logger and extend
             them with new samples made in the `run` method.
+
+        is_minimization: bool, default = False
+            If True, the optimization is treated as a minimization task.
+
     '''
-    def __init__(self, xs, evaluator, logger=None):
+    def __init__(self, xs, evaluator, logger=None, is_minimization=False):
         self.xs = np.array(xs, dtype=object)
         self.ys = np.repeat(-np.inf, len(xs))
         self.evaluator = evaluator
         self.observed = np.repeat(False, len(xs))
         self.arange = np.arange(len(xs))
         self.current_step = 1
+        self.is_minimization = is_minimization
 
         self.x_types = list(map(type, self.xs[0]))
 
@@ -63,7 +61,7 @@ class FiniteSetSampling():
         else:
             assert isinstance(logger, helper.logger.Logger) and logger.x_types == self.x_types
             self.logger = logger
-            raw_xs = xs.tolist()
+            raw_xs = self.xs.tolist()
 
             if len(logger.xs) > 0:
                 self.current_step = max(map(lambda d: d['step'], logger.infos)) + 1
@@ -79,7 +77,7 @@ class FiniteSetSampling():
                     pass
 
 
-    def run(self, metamodel_cls, num_probe=1, num_sampling=10, larger_is_better=True, train_args={}, predict_args={}):
+    def run(self, metamodel_cls, num_probe=1, num_sampling=10, train_args={}, predict_args={}):
         '''
         Sampling from remaining data points based on the prediction by the
         given model.
@@ -92,9 +90,6 @@ class FiniteSetSampling():
 
             num_sampling: int
                 The number of samplings in total.
-
-            larger_is_better: bool, default = True
-                If True, the optimization is a maximization task.
 
             train_args: dictionary, optional
                 The arbitrary keyword arguments passed to the training of the model.
@@ -115,12 +110,12 @@ class FiniteSetSampling():
             )
             nexts = self.arange[~self.observed][
                 model.predict_argsort(
-                    self.xs[~self.observed], larger_is_better, **predict_args
+                    self.xs[~self.observed], self.is_minimization, **predict_args
                 )[:num_probe]
             ]
             self.observed[nexts] = True
 
-            self.ys[nexts] = self.evaluator(self.xs[nexts])
+            self.ys[nexts] = self.evaluator(self.xs[nexts].tolist())
 
             if self.logger:
                 self.logger.log(self.xs[nexts], self.ys[nexts], [{"step": self.current_step, "model": metamodel_cls.__name__} for _ in range(len(nexts))])

@@ -30,7 +30,7 @@ from   unittest import TestCase
 
 class NullModel(MetaModel):
     @classmethod
-    def train(cls, xs, ys):
+    def train(cls, xs, ys, to_minimize=False):
         return cls()
 
     def predict(self, xs):

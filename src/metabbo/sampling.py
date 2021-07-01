@@ -40,18 +40,18 @@ class FiniteSetSampling():
             If povided, load the sampling records from the logger and extend
             them with new samples made in the `run` method.
 
-        is_minimization: bool, default = False
+        to_minimize: bool, default = False
             If True, the optimization is treated as a minimization task.
 
     '''
-    def __init__(self, xs, evaluator, logger=None, is_minimization=False):
+    def __init__(self, xs, evaluator, logger=None, to_minimize=False):
         self.xs = np.array(xs, dtype=object)
         self.ys = np.repeat(-np.inf, len(xs))
         self.evaluator = evaluator
         self.observed = np.repeat(False, len(xs))
         self.arange = np.arange(len(xs))
         self.current_step = 1
-        self.is_minimization = is_minimization
+        self.to_minimize = to_minimize
 
         self.x_types = list(map(type, self.xs[0]))
 
@@ -106,11 +106,12 @@ class FiniteSetSampling():
                 break
             model = metamodel_cls.train(
                 self.xs[self.observed], self.ys[self.observed],
+                to_minimize=self.to_minimize,
                 **train_args
             )
             nexts = self.arange[~self.observed][
                 model.predict_argsort(
-                    self.xs[~self.observed], self.is_minimization, **predict_args
+                    self.xs[~self.observed], **predict_args
                 )[:num_probe]
             ]
             self.observed[nexts] = True

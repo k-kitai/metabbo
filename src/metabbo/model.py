@@ -27,18 +27,22 @@ class MetaModel(ABC):
     Abstraction of surrogate models for black-box optimization
 
     A model should implement a class method `train` and a method `predict`.
+    Whether the objective is to be minimized or maximized should be chosen
+    at instantiation.
     '''
+    def __init__(self, to_minimize=False):
+        self.to_minimize=to_minimize
 
     @classmethod
     @abstractmethod
-    def train(cls, xs, ys):
+    def train(cls, xs, ys, to_minimize: bool):
         pass
 
     @abstractmethod
     def predict(self, xs):
         pass
 
-    def predict_argsort(self, xs, is_minimization=False, *args, **kwargs):
-        scores = self.predict(xs, *args, **kwargs)
-        return np.argsort(scores * [-1,1][is_minimization])
+    def predict_argsort(self, xs, *args, **kwargs):
+        pred_values = self.predict(xs, *args, **kwargs)
+        return np.argsort(pred_values * [-1,1][self.to_minimize])
 

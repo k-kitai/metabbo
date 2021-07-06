@@ -1,3 +1,7 @@
 # metabbo
 
-This package defines minimal interface required for any surrogate model for black-box optimization (BBO).
+This package defines minimal interface required of surrogate models for black-box optimization (BBO).
+
+# How to install
+
+On the top directory of this repository, run `pip install . --user`

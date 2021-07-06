@@ -123,3 +123,96 @@ class FiniteSetSampling():
             self.current_step += 1
         return
 
+class BinarySpaceSampling():
+    '''
+    Managing a sampling process over the binary space
+
+    Args:
+        n: int
+            The dimension of the search space
+
+        evaluator: function or callable object
+            Given a list of a subset of `xs`, this should return their
+            respective score.
+
+        logger: helper.Logger, default = None
+            If povided, load the sampling records from the logger and extend
+            them with new samples made in the `run` method.
+
+        to_minimize: bool, default = False
+            If True, the optimization is treated as a minimization task.
+
+    '''
+    def __init__(self, n, evaluator, logger=None, to_minimize=False):
+        self.n = n
+        self.xs = []
+        self.ys = []
+        self.evaluator = evaluator
+        self.current_step = 1
+        self.to_minimize = to_minimize
+
+        self.x_types = [int for _ in range(n)]
+
+        # Connect to logger if provided
+        if logger == None:
+            self.logger = None
+        else:
+            assert isinstance(logger, helper.logger.Logger) and logger.x_types == self.x_types
+            self.logger = logger
+
+            if len(logger.xs) > 0:
+                self.current_step = max(map(lambda d: d['step'], logger.infos)) + 1
+            else:
+                self.current_step = 1
+
+            for x, y in zip(logger.xs, logger.ys):
+                try:
+                    self.xs.append(x)
+                    self.ys.append(y)
+                except:
+                    pass
+
+    def run(self, metamodel_cls, num_probe=1, num_sampling=10, train_args={}, predict_args={}):
+        '''
+        Sampling data points by the `sample` method of the given model
+
+        Args:
+            metamodel: model with which sampling is done
+                A name of class which implements MetaModel, or an instance of a class
+                which implements MetaSamplingModel.
+
+            num_probe: int
+                The number of data points sampled at once.
+
+            num_sampling: int
+                The number of samplings in total.
+
+            train_args: dictionary, optional
+                The arbitrary keyword arguments passed to the training of the model.
+
+            predict_args: dictionary, optional
+                The arbitrary keyword arguments passed to the prediction by the model.
+
+        Returns:
+            nothing
+        '''
+        clsname = hasattr(metamodel_cls, "__name__") and metamodel_cls.__name__  or metamodel_cls.__class__.__name__
+        for _ in range(num_sampling):
+            model = metamodel_cls.train(
+                self.xs, self.ys,
+                to_minimize=self.to_minimize,
+                **train_args
+            )
+            nexts = np.array(model.sample(num_probe)).tolist()
+            nexts = list(filter(lambda x: x not in self.xs, nexts))
+            if len(nexts) == 0:
+                continue
+            self.xs.extend(nexts)
+            for x in nexts:
+                self.ys.append(self.evaluator(x))
+
+            if self.logger:
+                self.logger.log(nexts, self.ys[-len(nexts):], [{"step": self.current_step, "model": clsname} for _ in range(len(nexts))])
+            self.current_step += 1
+        return
+

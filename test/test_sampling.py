@@ -21,6 +21,7 @@
 #===============================================================================
 from   metabbo.helper import Logger
 from   metabbo import FiniteSetSampling, MetaModel
+from   metabbo import BinarySpaceSampling, MetaSamplingModel
 
 import logging
 import numpy as np
@@ -68,6 +69,65 @@ class TestFiniteSetSampling(TestCase):
         self.assertEqual(10, np.sum(sampling.observed))
         self.assertEqual(10, len(logger.xs))
         self.assertEqual(NullModel.__name__, logger.infos[0]['model'])
+        del sampling
+        del logger
+
+        os.remove(db_temp_path)
+
+def two_complement(x, scaling=True):
+    '''
+    Evaluation function for binary array
+    of two's complement representation.
+
+    example (when scaling=False):
+    [0,0,0,1] => 1
+    [0,0,1,0] => 2
+    [0,1,0,0] => 4
+    [1,0,0,0] => -8
+    [1,1,1,1] => -1
+    '''
+    val, n = 0, len(x)
+    for i in range(n):
+        val += (1<<(n-i-1)) * x[i] * (1 if (i>0) else -1)
+    return val * (2**(1-n) if scaling else 1)
+
+class NullBinarySpaceSamplingModel(MetaSamplingModel):
+
+    def __init__(self, n, to_minimize=False):
+        self.n = n
+        self.to_minimize = to_minimize
+
+    @classmethod
+    def train(cls, xs, ys, to_minimize=False, n=8):
+        return cls(n, to_minimize)
+
+    def predict(self, xs):
+        return np.random.uniform(size=len(xs))
+
+    def sample(self, m=1):
+        return np.random.randint(2, size=(m, self.n))
+
+class TestBinarySpaceSampling(TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestBinarySpaceSampling, self).__init__(*args, **kwargs)
+
+    def test_running(self):
+        sampling = BinarySpaceSampling(16, evaluator=two_complement, to_minimize=True)
+        sampling.run(NullBinarySpaceSamplingModel, num_probe=3, num_sampling=7, train_args={"n": 16})
+        self.assertEqual(21, len(sampling.xs))
+
+    def test_logger(self):
+        db_temp_path = tempfile.mktemp()
+        logger = Logger([int]*16, db_temp_path)
+        sampling = BinarySpaceSampling(16, evaluator=two_complement, logger=logger, to_minimize=True)
+        sampling.run(NullBinarySpaceSamplingModel, num_probe=3, num_sampling=7, train_args={"n": 16})
+        self.assertEqual(21, len(sampling.xs))
+        del sampling
+        del logger
+
+        logger = Logger([int]*16, db_temp_path)
+        sampling = BinarySpaceSampling(16, evaluator=two_complement, logger=logger, to_minimize=True)
+        self.assertEqual(21, len(sampling.xs))
         del sampling
         del logger
 

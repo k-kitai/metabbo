@@ -20,6 +20,6 @@
 # IN THE SOFTWARE.
 #===============================================================================
 
-from .model import MetaModel
-from .sampling import FiniteSetSampling
+from .model import MetaModel, MetaSamplingModel, MetaStatefulModel, MetaStatefulSamplingModel
+from .sampling import FiniteSetSampling, BinarySpaceSampling
 

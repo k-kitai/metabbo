@@ -46,3 +46,20 @@ class MetaModel(ABC):
         pred_values = self.predict(xs, *args, **kwargs)
         return np.argsort(pred_values * [-1,1][self.to_minimize])
 
+class MetaSamplingModel(ABC):
+    '''
+    SamplingModels return possible solutions without candidates provided
+    '''
+    @abstractmethod
+    def sample(self):
+        pass
+
+class MetaStatefulModel(ABC):
+    @abstractmethod
+    def train(cls, xs, ys, to_minimize: bool):
+        return
+
+class MetaStatefulSamplingModel(MetaSamplingModel, MetaStatefulModel):
+    def __init__(self, to_minimize=False):
+        self.to_minimize = to_minimize
+

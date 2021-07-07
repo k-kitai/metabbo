@@ -244,9 +244,17 @@ class BinarySpaceSampling(MetaSampling):
                 **train_args
             )
             nexts = np.array(model.sample(num_probe)).tolist()
-            nexts = list(filter(lambda x: x not in self.xs, nexts))
-            if len(nexts) == 0:
-                continue
+            new_xs = list(filter(lambda x: x not in self.xs, nexts))
+            if len(new_xs) == 0:
+                MAX_EDIT = self.n // 2
+                for _ in range(MAX_EDIT):
+                    bit = np.random.randint() % self.n
+                    nexts[0][bit] = 1 - nexts[0][bit]
+                    if not nexts[0] in self.xs:
+                        break
+                nexts = nexts[:1]
+            else:
+                nexts = new_xs
             self.xs.extend(nexts)
             for x in nexts:
                 self.ys.append(self.evaluator(x))

@@ -212,7 +212,7 @@ class BinarySpaceSampling(MetaSampling):
                 except:
                     pass
 
-    def run(self, metamodel_cls, num_probe=1, num_sampling=10, train_args={}, predict_args={}):
+    def run(self, metamodel_cls, num_probe=1, num_sampling=10, train_args={}, sample_args={}):
         '''
         Sampling data points by the `sample` method of the given model
 
@@ -243,7 +243,7 @@ class BinarySpaceSampling(MetaSampling):
                 to_minimize=self.to_minimize,
                 **train_args
             )
-            nexts = np.array(model.sample(num_probe)).tolist()
+            nexts = np.array(model.sample(num_probe, **sample_args)).tolist()
             new_xs = list(filter(lambda x: x not in self.xs, nexts))
             if len(new_xs) == 0:
                 MAX_EDIT = self.n // 2

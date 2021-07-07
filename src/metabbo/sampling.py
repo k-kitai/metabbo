@@ -19,12 +19,49 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 #===============================================================================
+from   abc import ABC, abstractmethod
 import logging
 import numpy as np
 
 from . import helper
 
-class FiniteSetSampling():
+class MetaSampling(ABC):
+
+    def __init__(self, report_every=100):
+        self.report_every = report_every
+
+    @abstractmethod
+    def run(self, metamodel, num_probe=1, num_sampling=10, train_args={}, predict_args={}):
+        '''
+        Do the sampling
+
+        Args:
+            metamodel: model with which sampling is done
+                A name of class which implements MetaModel, or an instance of a class
+                which implements MetaSamplingModel.
+
+            num_probe: int
+                The number of data points sampled at once.
+
+            num_sampling: int
+                The number of samplings in total.
+
+            train_args: dictionary, optional
+                The arbitrary keyword arguments passed to the training of the model.
+
+            predict_args: dictionary, optional
+                The arbitrary keyword arguments passed to the prediction by the model.
+        '''
+        pass
+
+    def report(self, step, num_sampling=0, method_name=""):
+        if (self.report_every > 0) and (step % self.report_every == 0):
+            print("sampled {0}".format(step) + \
+              ("/{0}".format(num_sampling) if num_sampling > 0 else "") + " th point" + \
+              (" with {0}.".format(method_name) if "" != method_name else ".")
+            )
+
+class FiniteSetSampling(MetaSampling):
     '''
     Managing a sampling process from a set of finite points to obtain the best
 
@@ -44,7 +81,8 @@ class FiniteSetSampling():
             If True, the optimization is treated as a minimization task.
 
     '''
-    def __init__(self, xs, evaluator, logger=None, to_minimize=False):
+    def __init__(self, xs, evaluator, logger=None, to_minimize=False, report_every=100):
+        super(BinarySpaceSampling, self).__init__(report_every=report_every)
         self.xs = np.array(xs, dtype=object)
         self.ys = np.repeat(-np.inf, len(xs))
         self.evaluator = evaluator
@@ -100,7 +138,7 @@ class FiniteSetSampling():
         Returns:
             nothing
         '''
-        for _ in range(num_sampling):
+        for step in range(num_sampling):
             if np.all(self.observed):
                 logging.error("Data points are already exhausted")
                 break
@@ -120,10 +158,11 @@ class FiniteSetSampling():
 
             if self.logger:
                 self.logger.log(self.xs[nexts], self.ys[nexts], [{"step": self.current_step, "model": metamodel_cls.__name__} for _ in range(len(nexts))])
+            self.report(step+1, num_sampling, metamodel_cls.__name__)
             self.current_step += 1
         return
 
-class BinarySpaceSampling():
+class BinarySpaceSampling(MetaSampling):
     '''
     Managing a sampling process over the binary space
 
@@ -143,7 +182,8 @@ class BinarySpaceSampling():
             If True, the optimization is treated as a minimization task.
 
     '''
-    def __init__(self, n, evaluator, logger=None, to_minimize=False):
+    def __init__(self, n, evaluator, logger=None, to_minimize=False, report_every=100):
+        super(BinarySpaceSampling, self).__init__(report_every=report_every)
         self.n = n
         self.xs = []
         self.ys = []
@@ -197,7 +237,7 @@ class BinarySpaceSampling():
             nothing
         '''
         clsname = hasattr(metamodel_cls, "__name__") and metamodel_cls.__name__  or metamodel_cls.__class__.__name__
-        for _ in range(num_sampling):
+        for step in range(num_sampling):
             model = metamodel_cls.train(
                 self.xs, self.ys,
                 to_minimize=self.to_minimize,
@@ -213,6 +253,7 @@ class BinarySpaceSampling():
 
             if self.logger:
                 self.logger.log(nexts, self.ys[-len(nexts):], [{"step": self.current_step, "model": clsname} for _ in range(len(nexts))])
+            self.report(step+1, num_sampling, clsname)
             self.current_step += 1
         return
 

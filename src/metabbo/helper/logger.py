@@ -46,10 +46,16 @@ class Logger:
         return [f(el) for (f, el) in zip(self.x_types, x)]
 
     def log1(self, x, y, info={}):
+        RETRY = 5
         self.db.execute("INSERT INTO Logs VALUES (" + self.x_types_format%tuple(x) + ", %e, '%s');"%(y, json.dumps(info)))
         self.num_cached += 1
         if self.commit_every <= self.num_cached:
-            self.db.commit()
+            for _ in range(RETRY):
+                try:
+                    self.db.commit()
+                except:
+                    continue
+                break
             self.num_cached = 0
 
     def log(self, xs, ys, infos=None):

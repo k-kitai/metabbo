@@ -21,45 +21,44 @@
 #===============================================================================
 from   abc import ABC, abstractmethod
 import numpy as np
+from   typing import Any, List
 
 class MetaModel(ABC):
     '''
     Abstraction of surrogate models for black-box optimization
-
-    A model should implement a class method `train` and a method `predict`.
-    Whether the objective is to be minimized or maximized should be chosen
-    at instantiation.
     '''
-    def __init__(self, to_minimize=False):
-        self.to_minimize=to_minimize
+    pass
 
-    @classmethod
+class MetaSelectiveModel(MetaModel):
     @abstractmethod
-    def train(cls, xs, ys, to_minimize: bool):
+    def argsort(self, xs) -> List[int]:
+        '''
+        This method returns the permutation list of indices,
+        whose order represents the preference for the next evaluations.
+        
+        Returns:
+            sorted_indices: [int]
+            
+            metadata: [dict]
+                Metadata for each element of sorted_indices. Just empty list is ok.
+        '''
         pass
 
-    @abstractmethod
-    def predict(self, xs):
-        pass
-
-    def predict_argsort(self, xs, *args, **kwargs):
-        pred_values = self.predict(xs, *args, **kwargs)
-        return np.argsort(pred_values * [-1,1][self.to_minimize])
-
-class MetaSamplingModel(ABC):
+class MetaGenerativeModel(MetaModel):
     '''
     SamplingModels return possible solutions without candidates provided
     '''
     @abstractmethod
-    def sample(self):
+    def sample(self) -> List[List[Any]]:
+        '''
+        This method suggests the candidate configurations
+        for the next evaluations.
+
+        Returns:
+            samples: [Vector]
+                Samples for next evaluations.
+            
+            metadata: [dict]
+                Metadata for each element of samples. Just empty list is ok.
+        '''
         pass
-
-class MetaStatefulModel(ABC):
-    @abstractmethod
-    def train(cls, xs, ys, to_minimize: bool):
-        return
-
-class MetaStatefulSamplingModel(MetaSamplingModel, MetaStatefulModel):
-    def __init__(self, to_minimize=False):
-        self.to_minimize = to_minimize
-

@@ -24,6 +24,7 @@ import logging
 import numpy as np
 
 from . import helper
+from .model import MetaModel, MetaGenerativeModel, MetaSelectiveModel
 
 class MetaSampling(ABC):
 
@@ -31,26 +32,20 @@ class MetaSampling(ABC):
         self.report_every = report_every
 
     @abstractmethod
-    def run(self, metamodel, num_probe=1, num_sampling=10, train_args={}, predict_args={}):
+    def run(self, metamodel, num_probe=1, num_sampling=10):
         '''
         Do the sampling
 
         Args:
             metamodel: model with which sampling is done
                 A name of class which implements MetaModel, or an instance of a class
-                which implements MetaSamplingModel.
+                which implements MetaGenerativeModel.
 
             num_probe: int
                 The number of data points sampled at once.
 
             num_sampling: int
                 The number of samplings in total.
-
-            train_args: dictionary, optional
-                The arbitrary keyword arguments passed to the training of the model.
-
-            predict_args: dictionary, optional
-                The arbitrary keyword arguments passed to the prediction by the model.
         '''
         pass
 
@@ -82,7 +77,7 @@ class FiniteSetSampling(MetaSampling):
 
     '''
     def __init__(self, xs, evaluator, logger=None, to_minimize=False, report_every=100):
-        super(BinarySpaceSampling, self).__init__(report_every=report_every)
+        super(FiniteSetSampling, self).__init__(report_every=report_every)
         self.xs = np.array(xs, dtype=object)
         self.ys = np.repeat(-np.inf, len(xs))
         self.evaluator = evaluator
@@ -115,13 +110,14 @@ class FiniteSetSampling(MetaSampling):
                     pass
 
 
-    def run(self, metamodel_cls, num_probe=1, num_sampling=10, train_args={}, predict_args={}):
+    def run(self, model : MetaSelectiveModel, num_probe=1, num_sampling=10, model_args={}):
         '''
         Sampling from remaining data points based on the prediction by the
         given model.
 
         Args:
-            metamodel_cls: ClassName of an implementation of MetaClass
+            model: MetaSelectiveModel
+                The model with which a new sampling point is selected.
 
             num_probe: int
                 The number of data points sampled at once.
@@ -129,10 +125,7 @@ class FiniteSetSampling(MetaSampling):
             num_sampling: int
                 The number of samplings in total.
 
-            train_args: dictionary, optional
-                The arbitrary keyword arguments passed to the training of the model.
-
-            predict_args: dictionary, optional
+            model_args: dictionary, optional
                 The arbitrary keyword arguments passed to the prediction by the model.
 
         Returns:
@@ -142,23 +135,22 @@ class FiniteSetSampling(MetaSampling):
             if np.all(self.observed):
                 logging.error("Data points are already exhausted")
                 break
-            model = metamodel_cls.train(
-                self.xs[self.observed], self.ys[self.observed],
-                to_minimize=self.to_minimize,
-                **train_args
-            )
-            nexts = self.arange[~self.observed][
-                model.predict_argsort(
-                    self.xs[~self.observed], **predict_args
-                )[:num_probe]
-            ]
+
+            next_idx, next_metadata = model.argsort(self.xs[~self.observed], **model_args)
+            nexts = self.arange[~self.observed][next_idx[:num_probe]]
+            next_metadata = next_metadata[:num_probe]
             self.observed[nexts] = True
 
             self.ys[nexts] = self.evaluator(self.xs[nexts].tolist())
 
+            if len(next_metadata) == 0:
+                next_metadata = [{} for _ in range(len(nexts))]
+            for i in range(len(nexts)):
+                next_metadata[i].update({"step": self.current_step, "model": model.__class__.__name__})
+
             if self.logger:
-                self.logger.log(self.xs[nexts], self.ys[nexts], [{"step": self.current_step, "model": metamodel_cls.__name__} for _ in range(len(nexts))])
-            self.report(step+1, num_sampling, metamodel_cls.__name__)
+                self.logger.log(self.xs[nexts], self.ys[nexts], next_metadata)
+            self.report(step+1, num_sampling, model.__class__.__name__)
             self.current_step += 1
         return
 
@@ -212,14 +204,13 @@ class BinarySpaceSampling(MetaSampling):
                 except:
                     pass
 
-    def run(self, metamodel_cls, num_probe=1, num_sampling=10, train_args={}, sample_args={}):
+    def run(self, model : MetaGenerativeModel, num_probe=1, num_sampling=10, model_args={}, rand_edit=True, omit_duplicate=True):
         '''
         Sampling data points by the `sample` method of the given model
 
         Args:
-            metamodel: model with which sampling is done
-                A name of class which implements MetaModel, or an instance of a class
-                which implements MetaSamplingModel.
+            model: MetaGenerativeModel
+                An instance of a class which implements MetaGenerativeModel.
 
             num_probe: int
                 The number of data points sampled at once.
@@ -227,24 +218,29 @@ class BinarySpaceSampling(MetaSampling):
             num_sampling: int
                 The number of samplings in total.
 
-            train_args: dictionary, optional
-                The arbitrary keyword arguments passed to the training of the model.
-
-            predict_args: dictionary, optional
+            model_args: dictionary, optional
                 The arbitrary keyword arguments passed to the prediction by the model.
 
         Returns:
             nothing
         '''
-        clsname = hasattr(metamodel_cls, "__name__") and metamodel_cls.__name__  or metamodel_cls.__class__.__name__
+        clsname = model.__class__.__name__
         for step in range(num_sampling):
-            model = metamodel_cls.train(
-                self.xs, self.ys,
-                to_minimize=self.to_minimize,
-                **train_args
-            )
-            nexts = np.array(model.sample(num_probe, **sample_args)).tolist()
-            new_xs = list(filter(lambda x: x not in self.xs, nexts))
+            nexts, next_metadata, next_values = model.sample(num_probe, **model_args)
+            nexts = np.array(nexts).tolist()
+
+            if omit_duplicate:
+                new_idx = list(filter(lambda n: nexts[n] not in self.xs, range(len(nexts))))
+            else:
+                new_idx = np.arange(len(nexts), dtype=int)
+            new_xs = [nexts[n] for n in new_idx]
+            if len(next_metadata) > 0:
+                next_metadata = [next_metadata[n] for n in new_idx]
+            else:
+                next_metadata = [{} for _ in range(len(new_idx))]
+            if len(next_values) > 0:
+                values = [next_values[n] for n in new_idx]
+
             if len(new_xs) == 0:
                 MAX_EDIT = self.n // 2
                 for _ in range(MAX_EDIT):
@@ -253,15 +249,20 @@ class BinarySpaceSampling(MetaSampling):
                     if not nexts[0] in self.xs:
                         break
                 nexts = nexts[:1]
+                next_metadata = [{"step": self.current_step, "model": clsname, "random": True}]
             else:
                 nexts = new_xs
+                for i in range(len(new_xs)):
+                    next_metadata[i].update({"step": self.current_step, "model": clsname})
             self.xs.extend(nexts)
-            for x in nexts:
-                self.ys.append(self.evaluator(x))
+            for n, x in enumerate(nexts):
+                if len(next_values) > 0:
+                    self.ys.append(next_values[n])
+                else:
+                    self.ys.append(self.evaluator(x))
 
             if self.logger:
-                self.logger.log(nexts, self.ys[-len(nexts):], [{"step": self.current_step, "model": clsname} for _ in range(len(nexts))])
+                self.logger.log(nexts, self.ys[-len(nexts):], next_metadata)
             self.report(step+1, num_sampling, clsname)
             self.current_step += 1
         return
-

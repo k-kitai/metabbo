@@ -21,7 +21,7 @@
 #===============================================================================
 from   metabbo.helper import Logger
 from   metabbo import FiniteSetSampling, MetaModel
-from   metabbo import BinarySpaceSampling, MetaSamplingModel
+from   metabbo import BinarySpaceSampling, MetaGenerativeModel, MetaSelectiveModel
 
 import logging
 import numpy as np
@@ -29,13 +29,9 @@ import os
 import tempfile
 from   unittest import TestCase
 
-class NullModel(MetaModel):
-    @classmethod
-    def train(cls, xs, ys, to_minimize=False):
-        return cls()
-
-    def predict(self, xs):
-        return np.random.uniform(size=len(xs))
+class NullModel(MetaSelectiveModel):
+    def argsort(self, xs):
+        return np.random.permutation(range(len(xs))), []
 
 class TestFiniteSetSampling(TestCase):
     def __init__(self, *args, **kwargs):
@@ -46,7 +42,7 @@ class TestFiniteSetSampling(TestCase):
         def evaluator(xs):
             return np.dot(xs, np.array([1,-1,1,-1,1,-1,1,-1,1,-1]))
         sampling = FiniteSetSampling(xs, evaluator, logger=None)
-        sampling.run(NullModel, num_probe=1, num_sampling=10)
+        sampling.run(NullModel(), num_probe=1, num_sampling=10)
         self.assertEqual(10, np.sum(sampling.observed))
 
     def test_logger(self):
@@ -57,7 +53,7 @@ class TestFiniteSetSampling(TestCase):
             return np.dot(xs, np.array([1,-1,1,-1,1,-1,1,-1,1,-1]))
         logger = Logger([int]*10, db_temp_path)
         sampling = FiniteSetSampling(xs, evaluator, logger=logger)
-        sampling.run(NullModel, num_probe=1, num_sampling=10)
+        sampling.run(NullModel(), num_probe=1, num_sampling=10)
         self.assertEqual(10, np.sum(sampling.observed))
         self.assertEqual(10, len(logger.xs))
         self.assertEqual(NullModel.__name__, logger.infos[0]['model'])
@@ -91,21 +87,14 @@ def two_complement(x, scaling=True):
         val += (1<<(n-i-1)) * x[i] * (1 if (i>0) else -1)
     return val * (2**(1-n) if scaling else 1)
 
-class NullBinarySpaceSamplingModel(MetaSamplingModel):
+class NullBinarySpaceSamplingModel(MetaGenerativeModel):
 
     def __init__(self, n, to_minimize=False):
         self.n = n
         self.to_minimize = to_minimize
 
-    @classmethod
-    def train(cls, xs, ys, to_minimize=False, n=8):
-        return cls(n, to_minimize)
-
-    def predict(self, xs):
-        return np.random.uniform(size=len(xs))
-
     def sample(self, m=1):
-        return np.random.randint(2, size=(m, self.n))
+        return np.random.randint(2, size=(m, self.n)), [{"message": "Sampling at random"}] * m
 
 class TestBinarySpaceSampling(TestCase):
     def __init__(self, *args, **kwargs):
@@ -113,14 +102,16 @@ class TestBinarySpaceSampling(TestCase):
 
     def test_running(self):
         sampling = BinarySpaceSampling(16, evaluator=two_complement, to_minimize=True)
-        sampling.run(NullBinarySpaceSamplingModel, num_probe=3, num_sampling=7, train_args={"n": 16})
+        null_model = NullBinarySpaceSamplingModel(16)
+        sampling.run(null_model, num_probe=3, num_sampling=7)
         self.assertEqual(21, len(sampling.xs))
 
     def test_logger(self):
         db_temp_path = tempfile.mktemp()
         logger = Logger([int]*16, db_temp_path)
         sampling = BinarySpaceSampling(16, evaluator=two_complement, logger=logger, to_minimize=True)
-        sampling.run(NullBinarySpaceSamplingModel, num_probe=3, num_sampling=7, train_args={"n": 16})
+        null_model = NullBinarySpaceSamplingModel(16)
+        sampling.run(null_model, num_probe=3, num_sampling=7)
         self.assertEqual(21, len(sampling.xs))
         del sampling
         del logger
